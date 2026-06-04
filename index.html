@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>講習會報到系統</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+  :root {
+    --bg: #F7F5F2; --card: #FFFFFF; --primary: #C1683A;
+    --primary-light: #F5E8E0; --primary-dark: #9B4E26;
+    --text: #1A1714; --text-sub: #6B6560; --text-hint: #A09890;
+    --border: #E5E0DA; --success: #2D7A4F; --success-bg: #EAF5EF;
+    --danger: #B93A3A; --danger-bg: #FDF0F0; --radius: 12px; --radius-sm: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 16px; }
+
+  .top-bar { background: var(--primary); color: white; padding: 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .top-bar h1 { font-size: 18px; font-weight: 700; }
+  .top-bar .sync { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+  .refresh-btn { background: none; border: none; color: white; cursor: pointer; padding: 4px; display: flex; align-items: center; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 12px 0; }
+  .stat-card { background: var(--card); border-radius: var(--radius-sm); padding: 12px 8px; text-align: center; border: 1px solid var(--border); }
+  .stat-card .num { font-size: 28px; font-weight: 700; line-height: 1; }
+  .stat-card .lbl { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+  .s-checked .num { color: var(--success); }
+  .s-pending .num { color: var(--primary); }
+
+  .tabs { display: flex; margin: 12px 12px 0; background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); overflow: hidden; }
+  .tab-btn { flex: 1; padding: 12px 8px; font-size: 15px; font-weight: 500; border: none; background: transparent; color: var(--text-sub); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .tab-btn.active { background: var(--primary); color: white; }
+
+  .content { padding: 12px; }
+
+  .search-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
+  .search-label { font-size: 14px; color: var(--text-sub); margin-bottom: 8px; font-weight: 500; }
+  .search-row { display: flex; gap: 10px; align-items: center; }
+  .search-input { flex: 1; height: 48px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 0 14px; font-size: 16px; font-family: inherit; color: var(--text); background: var(--bg); outline: none; }
+  .search-input:focus { border-color: var(--primary); }
+  .scan-btn { width: 48px; height: 48px; border-radius: var(--radius-sm); border: 1.5px solid var(--primary); background: var(--primary-light); color: var(--primary); display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+  .search-hint { font-size: 12px; color: var(--text-hint); margin-top: 8px; }
+
+  .scanner-area { display: none; margin-top: 12px; border-radius: var(--radius-sm); overflow: hidden; background: #000; position: relative; }
+  .scanner-area.active { display: block; }
+  .scanner-area video { width: 100%; display: block; max-height: 220px; object-fit: cover; }
+  .scanner-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scanner-frame { width: 200px; height: 90px; border: 2.5px solid var(--primary); border-radius: 4px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.45); }
+  .scanner-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,0.65); color: white; border: none; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .scan-status { font-size: 13px; color: var(--text-sub); margin-top: 8px; text-align: center; display: none; }
+
+  .msg { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 14px; margin-bottom: 10px; }
+  .msg.info { background: #EBF3FB; color: #1A5C8F; }
+  .msg.err { background: var(--danger-bg); color: var(--danger); }
+  .msg.ok { background: var(--success-bg); color: var(--success); }
+
+  .result-card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); padding: 16px; margin-bottom: 12px; }
+  .result-card.is-cancelled { border-color: #E5C9A0; background: #FFFAF4; }
+  .result-card.is-checked { border-color: #A3D4B8; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 99px; margin-bottom: 12px; }
+  .badge-cancel { background: #FEF3E2; color: #A0640A; }
+  .badge-checked { background: var(--success-bg); color: var(--success); }
+  .badge-pending { background: var(--bg); color: var(--text-sub); border: 1px solid var(--border); }
+
+  .couple-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .person-role { font-size: 12px; color: var(--text-hint); margin-bottom: 3px; }
+  .person-name { font-size: 20px; font-weight: 700; }
+  .person-id { font-size: 12px; color: var(--text-sub); margin-top: 3px; letter-spacing: 0.3px; }
+
+  .divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+  .checkin-action { display: flex; gap: 10px; align-items: center; }
+  .num-label { font-size: 13px; color: var(--text-sub); white-space: nowrap; }
+  .num-input { width: 80px; height: 44px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); text-align: center; font-size: 20px; font-weight: 700; font-family: inherit; color: var(--text); background: var(--bg); outline: none; }
+  .num-input:focus { border-color: var(--primary); }
+  .confirm-btn { flex: 1; height: 44px; border-radius: var(--radius-sm); border: none; background: var(--primary); color: white; font-size: 15px; font-weight: 700; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .confirm-btn:active { background: var(--primary-dark); transform: scale(0.98); }
+  .undo-btn { height: 44px; padding: 0 16px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: transparent; color: var(--text-sub); font-size: 14px; font-family: inherit; cursor: pointer; white-space: nowrap; }
+  .checked-info { font-size: 14px; color: var(--text-sub); flex: 1; }
+  .checked-info strong { color: var(--success); font-size: 18px; }
+
+  .list-section-title { font-size: 13px; font-weight: 700; color: var(--text-sub); letter-spacing: 0.5px; margin: 0 0 8px; }
+  .list-item { background: var(--card); border-radius: var(--radius-sm); border: 1px solid var(--border); padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+  .list-item.is-checked { border-color: #A3D4B8; }
+  .list-num-badge { width: 36px; height: 36px; border-radius: 50%; background: var(--success-bg); color: var(--success); font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .list-num-badge.pending { background: var(--bg); color: var(--text-hint); border: 1px solid var(--border); }
+  .list-names { flex: 1; }
+  .list-names .main { font-size: 15px; font-weight: 500; }
+  .list-names .sub { font-size: 12px; color: var(--text-hint); margin-top: 2px; }
+  .list-time { font-size: 12px; color: var(--text-sub); white-space: nowrap; }
+
+  .export-btn { width: 100%; height: 48px; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--card); color: var(--text); font-size: 15px; font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 14px; }
+
+  .loading { text-align: center; padding: 3rem; color: var(--text-hint); font-size: 15px; }
+  .empty { text-align: center; padding: 3rem; color: var(--text-hint); font-size: 15px; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div>
+    <h1>講習會報到系統</h1>
+    <div class="sync" id="sync-status">載入中...</div>
+  </div>
+  <button class="refresh-btn" onclick="loadData()" aria-label="重新整理">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6"/><path d="M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+  </button>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card s-total"><div class="num" id="stat-total">—</div><div class="lbl">總對數</div></div>
+  <div class="stat-card s-checked"><div class="num" id="stat-checked">—</div><div class="lbl">已報到</div></div>
+  <div class="stat-card s-pending"><div class="num" id="stat-pending">—</div><div class="lbl">未報到</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('search')">查詢報到</button>
+  <button class="tab-btn" onclick="switchTab('list')">報到名單</button>
+</div>
+
+<div class="content">
+  <div id="tab-search">
+    <div class="search-card">
+      <div class="search-label">輸入姓名或身分證號碼</div>
+      <div class="search-row">
+        <input class="search-input" id="search-input" type="text"
+          placeholder="謝權信 或 A129208518"
+          oninput="doSearch()" autocomplete="off" autocorrect="off" autocapitalize="off" />
+        <button class="scan-btn" onclick="toggleScanner()" aria-label="掃描條碼">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="12" y1="7" x2="12" y2="17"/></svg>
+        </button>
+      </div>
+      <div class="scanner-area" id="scanner-area">
+        <video id="scanner-video" autoplay playsinline muted></video>
+        <div class="scanner-overlay"><div class="scanner-frame"></div></div>
+        <button class="scanner-close" onclick="stopScanner()">✕</button>
+      </div>
+      <div class="scan-status" id="scan-status"></div>
+      <div class="search-hint">男女方姓名、身分證號碼前幾碼皆可查詢</div>
+    </div>
+    <div id="msg-area"></div>
+    <div id="results"></div>
+  </div>
+
+  <div id="tab-list" style="display:none">
+    <div id="list-content"><div class="loading">載入中...</div></div>
+    <button class="export-btn" onclick="exportCSV()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      匯出報到紀錄 CSV
+    </button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwqU9xiwGWNLzt0G0WfrNp5m9MvhfLKa9lqMi7BvXjN5fJhYVmBTEo_3F0gt5nA1qqE/exec';
+const CANCELLED = [31,64,72,76,93,94,97];
+let couples = [];
+let scannerActive = false;
+let codeReader = null;
+let currentTab = 'search';
+
+async function loadData() {
+  document.getElementById('sync-status').textContent = '同步中...';
+  try {
+    const res = await fetch(API + '?action=getAll');
+    const json = await res.json();
+    if (json.ok) {
+      couples = json.data.map(c => ({...c, cancelled: CANCELLED.includes(Number(c.seq))}));
+      updateStats();
+      const t = new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('sync-status').textContent = '上次同步 ' + t;
+      if (currentTab === 'list') renderList();
+      if (document.getElementById('search-input').value.trim()) doSearch();
+    }
+  } catch(e) {
+    document.getElementById('sync-status').textContent = '同步失敗，請重試';
+  }
+}
+
+function updateStats() {
+  const active = couples.filter(c => !c.cancelled);
+  const checked = active.filter(c => c.status === '已報到');
+  document.getElementById('stat-total').textContent = active.length;
+  document.getElementById('stat-checked').textContent = checked.length;
+  document.getElementById('stat-pending').textContent = active.length - checked.length;
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i) =>
+    b.classList.toggle('active',(i===0&&tab==='search')||(i===1&&tab==='list')));
+  document.getElementById('tab-search').style.display = tab==='search'?'':'none';
+  document.getElementById('tab-list').style.display = tab==='list'?'':'none';
+  if (tab==='list') renderList();
+}
+
+function doSearch() {
+  const q = document.getElementById('search-input').value.trim().toUpperCase().replace(/[\s\-]/g,'');
+  const results = document.getElementById('results');
+  document.getElementById('msg-area').innerHTML = '';
+  if (q.length < 1) { results.innerHTML = ''; return; }
+  const matches = couples.filter(c => {
+    const n1=(c.p1||'').toUpperCase(), n2=(c.p2||'').toUpperCase();
+    const i1=(c.id1||'').toUpperCase().replace(/\s/g,'');
+    const i2=(c.id2||'').toUpperCase().replace(/\s/g,'');
+    return n1.includes(q)||n2.includes(q)||i1.startsWith(q)||i2.startsWith(q);
+  });
+  if (matches.length===0) {
+    results.innerHTML='<div class="empty">查無結果<br><span style="font-size:13px;display:block;margin-top:6px">請確認姓名或身分證號碼</span></div>';
+    return;
+  }
+  results.innerHTML = matches.map(c => buildCard(c)).join('');
+}
+
+function buildCard(c) {
+  const isChecked = c.status==='已報到', isCancelled = c.cancelled;
+  let badge = isCancelled
+    ? '<span class="badge badge-cancel">已取消</span>'
+    : isChecked
+      ? `<span class="badge badge-checked">✓ 已報到・號碼 ${c.number}・${c.time}</span>`
+      : '<span class="badge badge-pending">未報到</span>';
+  let action = '';
+  if (!isCancelled) {
+    action = isChecked
+      ? `<div class="divider"></div>
+         <div class="checkin-action">
+           <div class="checked-info">號碼牌 <strong>${c.number}</strong>・${c.time}</div>
+           <button class="undo-btn" onclick="undoCheckin(${c.seq})">撤銷</button>
+         </div>`
+      : `<div class="divider"></div>
+         <div class="checkin-action">
+           <span class="num-label">號碼牌</span>
+           <input class="num-input" type="number" id="num-${c.seq}" placeholder="—" min="1" />
+           <button class="confirm-btn" onclick="confirmCheckin(${c.seq})">✓ 確認報到</button>
+         </div>`;
+  }
+  return `<div class="result-card ${isCancelled?'is-cancelled':isChecked?'is-checked':''}" id="card-${c.seq}">
+    ${badge}
+    <div class="couple-grid">
+      <div>
+        <div class="person-role">新人 1</div>
+        <div class="person-name">${c.p1}</div>
+        <div class="person-id">${c.id1||'—'}</div>
+      </div>
+      <div>
+        <div class="person-role">新人 2</div>
+        <div class="person-name">${c.p2}</div>
+        <div class="person-id">${c.id2||'—'}</div>
+      </div>
+    </div>
+    ${action}
+  </div>`;
+}
+
+async function confirmCheckin(seq) {
+  const inp = document.getElementById('num-'+seq);
+  const num = inp ? inp.value.trim() : '';
+  if (!num) { showMsg('err','請輸入號碼牌號碼'); return; }
+  const dup = couples.find(c =>
+    c.number && String(c.number)===String(num) &&
+    Number(c.seq)!==Number(seq) && c.status==='已報到');
+  if (dup) { showMsg('err',`號碼 ${num} 已被 ${dup.p1} 使用，請確認`); return; }
+  const timeStr = new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+  showMsg('info','儲存中...');
+  try {
+    await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({action:'checkin', seq, number:num, time:timeStr})
+    });
+    await loadData();
+    showMsg('ok','報到完成！');
+  } catch(e) { showMsg('err','儲存失敗，請重試'); }
+}
+
+async function undoCheckin(seq) {
+  showMsg('info','處理中...');
+  try {
+    await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({action:'undo', seq})
+    });
+    await loadData();
+    showMsg('ok','已撤銷報到');
+  } catch(e) { showMsg('err','操作失敗，請重試'); }
+}
+
+function showMsg(type, text) {
+  const el = document.getElementById('msg-area');
+  el.innerHTML = `<div class="msg ${type}">${text}</div>`;
+  if (type!=='info') setTimeout(()=>el.innerHTML='', 3000);
+}
+
+function renderList() {
+  const active = couples.filter(c=>!c.cancelled);
+  const checked = active.filter(c=>c.status==='已報到')
+    .sort((a,b)=>(parseInt(a.number)||0)-(parseInt(b.number)||0));
+  const pending = active.filter(c=>c.status!=='已報到');
+  let html = '';
+  if (checked.length>0) {
+    html += `<div class="list-section-title">已報到（${checked.length}）</div>`;
+    checked.forEach(c => {
+      html += `<div class="list-item is-checked">
+        <div class="list-num-badge">${c.number}</div>
+        <div class="list-names">
+          <div class="main">${c.p1} & ${c.p2}</div>
+          <div class="sub">報名序號 ${c.seq}</div>
+        </div>
+        <div class="list-time">${c.time}</div>
+      </div>`;
+    });
+  }
+  if (pending.length>0) {
+    html += `<div class="list-section-title" style="margin-top:${checked.length>0?'16px':'0'}">未報到（${pending.length}）</div>`;
+    pending.forEach(c => {
+      html += `<div class="list-item">
+        <div class="list-num-badge pending">—</div>
+        <div class="list-names">
+          <div class="main" style="color:var(--text-sub)">${c.p1} & ${c.p2}</div>
+          <div class="sub">報名序號 ${c.seq}</div>
+        </div>
+      </div>`;
+    });
+  }
+  document.getElementById('list-content').innerHTML = html || '<div class="empty">尚無資料</div>';
+}
+
+function exportCSV() {
+  const checked = couples
+    .filter(c=>!c.cancelled&&c.status==='已報到')
+    .sort((a,b)=>(parseInt(a.number)||0)-(parseInt(b.number)||0));
+  const rows = [['報到號碼','報名序號','新人1姓名','新人1身分證','新人2姓名','新人2身分證','報到時間']];
+  checked.forEach(c => rows.push([c.number, c.seq, c.p1, c.id1||'', c.p2, c.id2||'', c.time||'']));
+  const csv = rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='講習會報到紀錄.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function toggleScanner() {
+  if (scannerActive) { stopScanner(); return; }
+  const area = document.getElementById('scanner-area');
+  const status = document.getElementById('scan-status');
+  area.classList.add('active');
+  status.style.display = 'block';
+  status.textContent = '請將相機對準身分證背面條碼';
+  scannerActive = true;
+  try {
+    codeReader = new ZXing.BrowserMultiFormatReader();
+    codeReader.decodeFromVideoDevice(null, 'scanner-video', (result, err) => {
+      if (result) {
+        const text = result.getText();
+        const idMatch = text.match(/[A-Z][0-9]{9}/);
+        document.getElementById('search-input').value = idMatch ? idMatch[0] : text.substring(0,20);
+        doSearch();
+        stopScanner();
+        status.style.display = 'none';
+      }
+    });
+  } catch(e) {
+    status.textContent = '無法啟動相機，請手動輸入';
+  }
+}
+
+function stopScanner() {
+  scannerActive = false;
+  document.getElementById('scanner-area').classList.remove('active');
+  document.getElementById('scan-status').style.display = 'none';
+  if (codeReader) { try { codeReader.reset(); } catch(e){} codeReader = null; }
+}
+
+loadData();
+setInterval(loadData, 30000);
+</script>
+</body>
+</html>
